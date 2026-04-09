@@ -1,0 +1,396 @@
+openapi: 3.0.3
+info:
+  title: DevSecOps Auto-Remediation API
+  description: REST API for the DevSecOps security pipeline dashboard
+  version: 1.0.0
+  contact:
+    name: Security Team
+    email: security@example.com
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /api/v1/health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /api/v1/scans:
+    get:
+      summary: List all scans
+      operationId: listScans
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: List of scans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Scan'
+
+  /api/v1/scans/{id}:
+    get:
+      summary: Get scan by ID
+      operationId: getScan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Scan details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scan'
+        '404':
+          description: Scan not found
+
+  /api/v1/findings:
+    get:
+      summary: List findings
+      operationId: listFindings
+      parameters:
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [critical, high, medium, low, info]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [new, confirmed, remediated, false_positive, accepted_risk]
+        - name: scanner
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of findings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Finding'
+
+  /api/v1/findings/{id}:
+    get:
+      summary: Get finding by ID
+      operationId: getFinding
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Finding details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Finding'
+
+  /api/v1/findings/{id}/status:
+    put:
+      summary: Update finding status
+      operationId: updateFindingStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [new, confirmed, remediated, false_positive, accepted_risk]
+      responses:
+        '200':
+          description: Status updated
+        '400':
+          description: Invalid request
+
+  /api/v1/fixes:
+    get:
+      summary: List fixes
+      operationId: listFixes
+      responses:
+        '200':
+          description: List of fixes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Fix'
+
+  /api/v1/metrics:
+    get:
+      summary: Get pipeline metrics
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Pipeline metrics
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PipelineMetric'
+
+  /api/v1/metrics/summary:
+    get:
+      summary: Get metrics summary
+      operationId: getMetricsSummary
+      responses:
+        '200':
+          description: Metrics summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_scans:
+                    type: integer
+                  avg_duration_sec:
+                    type: number
+                  avg_fix_accuracy_rate:
+                    type: number
+                  avg_false_positive_rate:
+                    type: number
+                  total_findings:
+                    type: integer
+                  total_fixes:
+                    type: integer
+                  compliant_scans:
+                    type: integer
+
+  /api/v1/policies:
+    get:
+      summary: List policy decisions
+      operationId: listPolicyDecisions
+      responses:
+        '200':
+          description: Policy decisions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PolicyDecision'
+
+components:
+  schemas:
+    Scan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        repository:
+          type: string
+        commit_sha:
+          type: string
+        branch:
+          type: string
+        trigger_type:
+          type: string
+        scan_type:
+          type: string
+          enum: [sast, sca, dast, secrets]
+        tool:
+          type: string
+        status:
+          type: string
+        finding_count:
+          type: integer
+        critical_count:
+          type: integer
+        high_count:
+          type: integer
+        medium_count:
+          type: integer
+        low_count:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        duration_seconds:
+          type: integer
+
+    Finding:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        scan_id:
+          type: string
+          format: uuid
+        scanner:
+          type: string
+        rule_id:
+          type: string
+        cwe:
+          type: array
+          items:
+            type: string
+        cve:
+          type: array
+          items:
+            type: string
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [critical, high, medium, low, info]
+        confidence:
+          type: string
+        file_path:
+          type: string
+        start_line:
+          type: integer
+        end_line:
+          type: integer
+        code_snippet:
+          type: string
+        remediable:
+          type: boolean
+        remediation_hint:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Fix:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        finding_id:
+          type: string
+          format: uuid
+        codemod_name:
+          type: string
+        file_path:
+          type: string
+        original_code:
+          type: string
+        fixed_code:
+          type: string
+        status:
+          type: string
+          enum: [pending, success, failed, reverted]
+        validation_passed:
+          type: boolean
+        rescan_passed:
+          type: boolean
+        pr_url:
+          type: string
+        error:
+          type: string
+        applied_at:
+          type: string
+          format: date-time
+
+    PipelineMetric:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        pipeline_run_id:
+          type: string
+        repository:
+          type: string
+        total_duration_sec:
+          type: integer
+        total_findings:
+          type: integer
+        fixes_attempted:
+          type: integer
+        fixes_successful:
+          type: integer
+        fix_accuracy_rate:
+          type: number
+        false_positive_rate:
+          type: number
+        regression_count:
+          type: integer
+        pr_created:
+          type: boolean
+        policy_compliant:
+          type: boolean
+        timestamp:
+          type: string
+          format: date-time
+
+    PolicyDecision:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        policy_name:
+          type: string
+        decision:
+          type: string
+          enum: [allow, deny, warn]
+        violations:
+          type: array
+          items:
+            type: string
+        evaluated_at:
+          type: string
+          format: date-time
