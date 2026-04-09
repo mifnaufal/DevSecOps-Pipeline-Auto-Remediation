@@ -1,0 +1,148 @@
+# Stage 3: OPA Policy Evaluation
+# Evaluates PR metadata against security policies before allowing merge.
+name: Policy Evaluation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  opa-policy-check:
+    name: OPA Policy Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract PR metadata
+        id: extract-metadata
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const metadata = {
+              pr_number: pr.number,
+              pr_author: pr.user.login,
+              pr_labels: pr.labels.map(l => l.name),
+              pr_title: pr.title,
+              files_changed: pr.changed_files,
+              additions: pr.additions,
+              deletions: pr.deletions,
+              is_auto_fix: pr.labels.some(l => l.name === 'auto-remediation'),
+              has_security_label: pr.labels.some(l => l.name === 'security'),
+              base_ref: pr.base.ref,
+              head_ref: pr.head.ref,
+            };
+            core.setOutput('metadata', JSON.stringify(metadata));
+
+      - name: Install OPA
+        uses: open-policy-agent/opa-action@v1
+        with:
+          version: latest
+
+      - name: Evaluate PR against policies
+        id: policy-eval
+        run: |
+          echo '${{ steps.extract-metadata.outputs.metadata }}' > /tmp/pr_input.json
+          
+          # Evaluate PR approval policy
+          opa eval \
+            --data policies/pr_approval.rego \
+            --input /tmp/pr_input.json \
+            --format pretty \
+            'data.pr_approval.allow' > /tmp/pr_result.json
+          
+          # Evaluate scope limits
+          opa eval \
+            --data policies/scope_limit.rego \
+            --input /tmp/pr_input.json \
+            --format pretty \
+            'data.scope_limit.within_bounds' > /tmp/scope_result.json
+          
+          # Evaluate license compliance (for SCA PRs)
+          opa eval \
+            --data policies/license_compliance.rego \
+            --input /tmp/pr_input.json \
+            --format pretty \
+            'data.license_compliance.compliant' > /tmp/license_result.json || true
+          
+          # Combine results
+          jq -s 'add' /tmp/pr_result.json /tmp/scope_result.json /tmp/license_result.json > /tmp/combined_result.json
+          echo "combined_result=$(cat /tmp/combined_result.json)" >> $GITHUB_OUTPUT
+
+      - name: Check policy compliance
+        id: check
+        run: |
+          ALLOWED=$(echo '${{ steps.policy-eval.outputs.combined_result }}' | jq -r '.result[0].expressions[0].value // false')
+          
+          if [[ "$ALLOWED" == "true" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "message=All policies passed" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            VIOLATIONS=$(echo '${{ steps.policy-eval.outputs.combined_result }}' | jq -r '.violations // [] | join("; ")')
+            echo "message=Policy violations: $VIOLATIONS" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update PR status
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const status = '${{ steps.check.outputs.status }}';
+            const message = '${{ steps.check.outputs.message }}';
+            
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.payload.pull_request.head.sha,
+              state: status,
+              context: 'policy-evaluation',
+              description: message,
+              target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            });
+
+      - name: Comment on PR if policy fails
+        if: steps.check.outputs.status == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `## 🔒 Policy Evaluation Failed\n\n${{ steps.check.outputs.message }}\n\nThis PR does not meet security policy requirements. Please review the violations and update your changes accordingly.\n\n[View policy documentation](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/policies/)`,
+            });
+
+  license-scan:
+    name: License Compliance Scan
+    if: github.event.pull_request.labels.some(l => l.name == 'auto-remediation')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      - name: Run license check
+        run: |
+          # Check for common license files
+          if [ -f "package-lock.json" ]; then
+            npx license-checker --production --json --out /tmp/licenses.json || true
+          fi
+          if [ -f "go.sum" ]; then
+            go list -m -json all > /tmp/go-licenses.json 2>/dev/null || true
+          fi
+          # Evaluate with OPA
+          if [ -f "/tmp/licenses.json" ]; then
+            opa eval \
+              --data policies/license_compliance.rego \
+              --input /tmp/licenses.json \
+              'data.license_compliance.compliant' || echo "License check inconclusive"
+          fi

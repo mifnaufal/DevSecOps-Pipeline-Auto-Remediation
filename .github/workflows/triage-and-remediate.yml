@@ -1,0 +1,362 @@
+# Stage 2: Triage, Remediation, Validation, and PR Creation
+# Consumes SARIF artifacts from ci-security-scan.yml
+name: Triage and Auto-Remediation
+
+on:
+  workflow_run:
+    workflows: ["Security Scan"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      sarif_paths:
+        description: 'Comma-separated SARIF file paths'
+        required: false
+        default: 'reports/sarif/semgrep-results.sarif,reports/sarif/trivy-results.sarif'
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: auto-remediation-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TRIAGE_MIN_SEVERITY: high
+  REMEDIATION_DETERMINISTIC_ONLY: true
+  VALIDATION_RUN_TESTS: true
+  VALIDATION_RUN_LINTER: true
+  VALIDATION_RUN_RESCAN: true
+
+jobs:
+  triage:
+    name: Triage & Correlation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      findings_json: ${{ steps.run-triage.outputs.findings }}
+      high_findings_count: ${{ steps.run-triage.outputs.high_count }}
+      remediable_count: ${{ steps.run-triage.outputs.remediable_count }}
+    steps:
+      - name: Checkout pipeline repository
+        uses: actions/checkout@v4
+
+      - name: Download SARIF artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Find all SARIF artifacts from the triggering workflow run
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.payload.workflow_run?.id || process.env.GITHUB_RUN_ID,
+            });
+            
+            fs.mkdirSync('reports/sarif', { recursive: true });
+            
+            for (const artifact of artifacts.data.artifacts) {
+              if (artifact.name.endsWith('-sarif')) {
+                const download = await github.rest.actions.downloadArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id,
+                  archive_format: 'zip',
+                });
+                
+                const zipPath = `reports/sarif/${artifact.name}.zip`;
+                fs.writeFileSync(zipPath, Buffer.from(download.data));
+              }
+            }
+
+      - name: Extract SARIF files
+        run: |
+          cd reports/sarif
+          for f in *.zip; do
+            unzip -o "$f" 2>/dev/null || true
+          done
+          ls -la || echo "No SARIF artifacts found"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Build triage engine
+        run: go build -o triage-engine ./cmd/triage-engine/
+
+      - name: Run triage engine
+        id: run-triage
+        run: |
+          mkdir -p reports/triage
+          ./triage-engine \
+            --input-dir reports/sarif \
+            --output reports/triage/findings.json \
+            --min-severity ${{ env.TRIAGE_MIN_SEVERITY }} \
+            --dedup true \
+            --cwe-mapping true
+          
+          # Output results for downstream jobs
+          echo "findings=$(cat reports/triage/findings.json)" >> $GITHUB_OUTPUT
+          HIGH_COUNT=$(jq '[.[] | select(.severity == "high" or .severity == "critical")] | length' reports/triage/findings.json)
+          REMEDIABLE_COUNT=$(jq '[.[] | select(.remediable == true)] | length' reports/triage/findings.json)
+          echo "high_count=$HIGH_COUNT" >> $GITHUB_OUTPUT
+          echo "remediable_count=$REMEDIABLE_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Upload triage results
+        uses: actions/upload-artifact@v4
+        with:
+          name: triage-findings
+          path: reports/triage/findings.json
+          retention-days: 30
+
+  remediate:
+    name: AST Remediation
+    needs: triage
+    if: needs.triage.outputs.remediable_count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      fixes_json: ${{ steps.run-remediation.outputs.fixes }}
+      fix_success_count: ${{ steps.run-remediation.outputs.success_count }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use a PAT with write permissions for PR creation
+          token: ${{ secrets.AUTO_FIX_PAT }}
+
+      - name: Download triage findings
+        uses: actions/download-artifact@v4
+        with:
+          name: triage-findings
+          path: reports/triage/
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Setup Tree-sitter
+        run: |
+          # Install Tree-sitter CLI for codemod execution
+          npm install -g tree-sitter-cli
+          # Install language parsers
+          pip install tree-sitter-languages
+
+      - name: Build remediation runner
+        run: go build -o remediation-runner ./cmd/remediation-runner/
+
+      - name: Run AST codemods
+        id: run-remediation
+        run: |
+          mkdir -p reports/fixes
+          ./remediation-runner \
+            --findings reports/triage/findings.json \
+            --codemods-dir codemods/ \
+            --output-dir reports/fixes/ \
+            --deterministic-only ${{ env.REMEDIATION_DETERMINISTIC_ONLY }} \
+            --max-files 10
+          
+          echo "fixes=$(cat reports/fixes/fixes.json)" >> $GITHUB_OUTPUT
+          SUCCESS_COUNT=$(jq '[.[] | select(.status == "success")] | length' reports/fixes/fixes.json)
+          echo "success_count=$SUCCESS_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Upload fix artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: remediation-fixes
+          path: reports/fixes/
+          retention-days: 30
+
+  validate:
+    name: Validation Gate
+    needs: [triage, remediate]
+    if: needs.remediate.outputs.fix_success_count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      validation_passed: ${{ steps.run-validation.outputs.passed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.AUTO_FIX_PAT }}
+
+      - name: Download remediation fixes
+        uses: actions/download-artifact@v4
+        with:
+          name: remediation-fixes
+          path: reports/fixes/
+
+      - name: Download triage findings
+        uses: actions/download-artifact@v4
+        with:
+          name: triage-findings
+          path: reports/triage/
+
+      - name: Apply patches to working tree
+        run: |
+          # Apply generated patches
+          for patch in reports/fixes/patches/*.patch; do
+            if [ -f "$patch" ]; then
+              git apply "$patch" || echo "Failed to apply $patch"
+            fi
+          done
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci 2>/dev/null || true
+          pip install -r requirements.txt 2>/dev/null || true
+
+      - name: Run validation gate
+        id: run-validation
+        run: |
+          mkdir -p reports/validation
+          ./scripts/validation-gate.sh \
+            --fixes reports/fixes/fixes.json \
+            --run-tests ${{ env.VALIDATION_RUN_TESTS }} \
+            --run-linter ${{ env.VALIDATION_RUN_LINTER }} \
+            --run-rescan ${{ env.VALIDATION_RUN_RESCAN }} \
+            --output reports/validation/result.json
+          
+          PASSED=$(jq '.passed' reports/validation/result.json)
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+
+      - name: Upload validation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-results
+          path: reports/validation/result.json
+          retention-days: 30
+
+      - name: Revert patches if validation failed
+        if: steps.run-validation.outputs.passed == 'false'
+        run: |
+          git checkout -- .
+          echo "Validation failed - patches reverted"
+
+  create-pr:
+    name: Create Remediation PR
+    needs: [triage, remediate, validate]
+    if: needs.validate.outputs.validation_passed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.AUTO_FIX_PAT }}
+
+      - name: Download fixes
+        uses: actions/download-artifact@v4
+        with:
+          name: remediation-fixes
+          path: reports/fixes/
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build PR bot
+        run: go build -o prbot ./cmd/prbot/
+
+      - name: Create remediation PR
+        id: create-pr
+        run: |
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          BRANCH_NAME="auto-fix/security-${TIMESTAMP}"
+          
+          ./prbot \
+            --repo ${{ github.repository }} \
+            --base-branch ${{ github.ref_name }} \
+            --new-branch $BRANCH_NAME \
+            --fixes reports/fixes/fixes.json \
+            --findings reports/triage/findings.json \
+            --token ${{ secrets.AUTO_FIX_PAT }} \
+            --labels "security,auto-remediation" \
+            --output reports/fixes/pr-metadata.json
+          
+          PR_URL=$(jq -r '.pr_url' reports/fixes/pr-metadata.json)
+          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+          echo "pr_url=$PR_URL" >> $GITHUB_STEP_SUMMARY
+
+      - name: Run OPA policy check
+        uses: open-policy-agent/opa-action@v1
+        with:
+          policies: policies/
+          input: reports/fixes/pr-metadata.json
+          fail-on-violation: true
+
+      - name: Post pipeline summary
+        run: |
+          echo "## Auto-Remediation Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **High/Critical Findings:** ${{ needs.triage.outputs.high_findings_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Remediable:** ${{ needs.triage.outputs.remediable_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Fixes Applied:** ${{ needs.remediate.outputs.fix_success_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Validation:** ✅ Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR:** ${{ steps.create-pr.outputs.pr_url }}" >> $GITHUB_STEP_SUMMARY
+
+  fallback-annotation:
+    name: Fallback - Manual Annotation
+    needs: [triage, remediate, validate]
+    if: failure() && needs.triage.outputs.remediable_count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download triage findings
+        uses: actions/download-artifact@v4
+        with:
+          name: triage-findings
+          path: reports/triage/
+
+      - name: Create issue for manual review
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const findings = JSON.parse(fs.readFileSync('reports/triage/findings.json', 'utf8'));
+            
+            const body = [
+              '## Security Vulnerabilities Requiring Manual Review',
+              '',
+              `Auto-remediation pipeline detected **${findings.length}** high/critical findings.`,
+              '',
+              '| Rule | File | Severity | CWE |',
+              '|------|------|----------|-----|',
+              ...findings.map(f => `| ${f.rule_id} | ${f.file_path} | ${f.severity} | ${f.cwe.join(', ')} |`),
+              '',
+              '### Next Steps',
+              '1. Review each finding above',
+              '2. Apply manual fixes or mark as false positive',
+              '3. Reference OWASP guidelines for remediation patterns',
+            ].join('\n');
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔒 Security Review Required - ${findings.length} findings`,
+              body: body,
+              labels: ['security', 'manual-review'],
+            });
