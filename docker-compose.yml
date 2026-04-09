@@ -1,0 +1,133 @@
+version: '3.8'
+
+services:
+  # PostgreSQL - Observability database
+  postgres:
+    image: postgres:16-alpine
+    container_name: devsecops-postgres
+    environment:
+      POSTGRES_USER: devsecops
+      POSTGRES_PASSWORD: devsecops
+      POSTGRES_DB: devsecops
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devsecops"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Triage Engine Service
+  triage-engine:
+    build:
+      context: .
+      dockerfile: docker/triage-engine/Dockerfile
+    container_name: devsecops-triage
+    environment:
+      DATABASE_URL: postgres://devsecops:devsecops@postgres:5432/devsecops?sslmode=disable
+      TRIAGE_MIN_SEVERITY: high
+    volumes:
+      - ./reports:/app/reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Remediation Runner
+  remediation-runner:
+    build:
+      context: .
+      dockerfile: docker/remediation-runner/Dockerfile
+    container_name: devsecops-remediation
+    environment:
+      DATABASE_URL: postgres://devsecops:devsecops@postgres:5432/devsecops?sslmode=disable
+    volumes:
+      - ./reports:/app/reports
+      - ./codemods:/app/codemods
+    depends_on:
+      - triage-engine
+
+  # Validation Gate
+  validation-gate:
+    build:
+      context: .
+      dockerfile: docker/validation-gate/Dockerfile
+    container_name: devsecops-validation
+    volumes:
+      - ./reports:/app/reports
+    depends_on:
+      - remediation-runner
+
+  # API Server
+  api-server:
+    build:
+      context: .
+      dockerfile: docker/api-server/Dockerfile
+    container_name: devsecops-api
+    environment:
+      DATABASE_URL: postgres://devsecops:devsecops@postgres:5432/devsecops?sslmode=disable
+      API_PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Frontend Dashboard
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: devsecops-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-server
+
+  # OPA (sidecar for policy evaluation)
+  opa:
+    image: openpolicyagent/opa:0.60.0
+    container_name: devsecops-opa
+    command:
+      - "run"
+      - "--server"
+      - "--watch"
+      - "--addr=0.0.0.0:8181"
+      - "/policies"
+    volumes:
+      - ./policies:/policies
+    ports:
+      - "8181:8181"
+
+  # Prometheus (metrics collection)
+  prometheus:
+    image: prom/prometheus:v2.48.1
+    container_name: devsecops-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+
+  # Grafana (visualization)
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: devsecops-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  postgres-data:
+  prometheus-data:
+  grafana-data:
