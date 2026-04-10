@@ -1,0 +1,23 @@
+{
+  "passed": false,
+  "timestamp": "2026-04-10T04:09:20Z",
+  "tests_result": {
+    "passed": false,
+    "output": "Tests failed or skipped"
+  },
+  "linter_result": {
+    "passed": false,
+    "output": "Linter failed or skipped"
+  },
+  "rescan_result": {
+    "passed": false,
+    "new_findings": 0,
+    "output": "New findings detected"
+  },
+  "fixed_files": [
+    "vulnerable_app.py",
+    "vulnerable_app.py",
+    "vulnerable_app.js"
+  ],
+  "errors": []
+}
