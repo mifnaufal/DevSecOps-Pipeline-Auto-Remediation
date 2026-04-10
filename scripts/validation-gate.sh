@@ -6,7 +6,7 @@
 #   ./scripts/validation-gate.sh --fixes fixes.json --run-tests true \
 #       --run-linter true --run-rescan true --output result.json
 
-set -euo pipefail
+set -uo pipefail
 
 # Defaults
 FIXES_PATH="reports/fixes/fixes.json"

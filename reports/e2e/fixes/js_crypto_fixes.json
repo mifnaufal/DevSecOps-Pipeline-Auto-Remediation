@@ -1,0 +1,20 @@
+{
+  "codemod": "insecure_crypto_javascript",
+  "filesScanned": 1,
+  "filesModified": 1,
+  "changes": [
+    {
+      "file": "/home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/test-fixtures/sample-app/vulnerable_app.js",
+      "line": 5,
+      "original": "createHash('md5')",
+      "fixed": "createHash('sha256')",
+      "rule": "insecure-crypto",
+      "cwe": [
+        "CWE-327",
+        "CWE-328"
+      ],
+      "description": "Replaced createHash('md5') with createHash('sha256')"
+    }
+  ],
+  "dryRun": false
+}

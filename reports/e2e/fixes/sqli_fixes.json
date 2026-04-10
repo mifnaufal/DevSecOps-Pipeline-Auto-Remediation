@@ -1,0 +1,7 @@
+{
+  "codemod": "sql_injection_python",
+  "files_scanned": 1,
+  "files_modified": 0,
+  "changes": [],
+  "dry_run": true
+}

@@ -1,0 +1,13 @@
+{
+  "passed": false,
+  "timestamp": "2026-04-10T02:42:08Z",
+  "tests_result": false,
+  "linter_result": false,
+  "rescan_result": false,
+  "fixed_files": [
+  "vulnerable_app.py",
+  "vulnerable_app.py",
+  "vulnerable_app.js"
+],
+  "errors": []
+}

@@ -55,7 +55,7 @@ class InsecureCryptoCodemod {
     const jsFiles = this._findJSFiles(targetDir);
 
     for (const filePath of jsFiles) {
-      const content = fs.readFileSync(filePath, "utf-8");
+      let content = fs.readFileSync(filePath, "utf-8");
       const originalContent = content;
       const fileChanges = [];
 

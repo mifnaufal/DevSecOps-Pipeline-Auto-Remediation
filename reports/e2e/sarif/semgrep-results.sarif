@@ -1,0 +1,75 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [{
+    "tool": {"driver": {"name": "Semgrep", "version": "1.50.0"}},
+    "results": [
+      {
+        "ruleId": "hardcoded-secret",
+        "level": "error",
+        "message": {"text": "Hardcoded secret detected"},
+        "locations": [{
+          "physicalLocation": {
+            "artifactLocation": {"uri": "vulnerable_app.py"},
+            "region": {"startLine": 5, "snippet": {"text": "API_KEY = 'sk-test-123'"}}
+          }
+        }]
+      },
+      {
+        "ruleId": "md5-used",
+        "level": "error",
+        "message": {"text": "Use of MD5 hash function"},
+        "locations": [{
+          "physicalLocation": {
+            "artifactLocation": {"uri": "vulnerable_app.py"},
+            "region": {"startLine": 6, "snippet": {"text": "hashlib.md5(password.encode())"}}
+          }
+        }]
+      },
+      {
+        "ruleId": "sha1-used",
+        "level": "error",
+        "message": {"text": "Use of SHA1 hash function"},
+        "locations": [{
+          "physicalLocation": {
+            "artifactLocation": {"uri": "vulnerable_app.py"},
+            "region": {"startLine": 10, "snippet": {"text": "hashlib.sha1(token.encode())"}}
+          }
+        }]
+      },
+      {
+        "ruleId": "sql-injection",
+        "level": "error",
+        "message": {"text": "SQL injection via string concatenation"},
+        "locations": [{
+          "physicalLocation": {
+            "artifactLocation": {"uri": "vulnerable_app.py"},
+            "region": {"startLine": 16, "snippet": {"text": "\"SELECT * FROM users WHERE id = \" + user_id"}}
+          }
+        }]
+      },
+      {
+        "ruleId": "insecure_crypto",
+        "level": "error",
+        "message": {"text": "Use of weak cryptographic algorithm"},
+        "locations": [{
+          "physicalLocation": {
+            "artifactLocation": {"uri": "vulnerable_app.js"},
+            "region": {"startLine": 5, "snippet": {"text": "crypto.createHash('md5')"}}
+          }
+        }]
+      },
+      {
+        "ruleId": "xss-innerhtml",
+        "level": "warning",
+        "message": {"text": "Potential XSS via innerHTML"},
+        "locations": [{
+          "physicalLocation": {
+            "artifactLocation": {"uri": "vulnerable_app.js"},
+            "region": {"startLine": 10, "snippet": {"text": "document.getElementById('user').innerHTML = user.name"}}
+          }
+        }]
+      }
+    ]
+  }]
+}

@@ -1,0 +1,32 @@
+{
+  "codemod": "insecure_crypto_python",
+  "files_scanned": 1,
+  "files_modified": 1,
+  "changes": [
+    {
+      "file": "/home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/test-fixtures/sample-app/vulnerable_app.py",
+      "line": 6,
+      "original": "hashlib.md5(",
+      "fixed": "hashlib.sha256(",
+      "rule": "insecure-crypto",
+      "cwe": [
+        "CWE-327",
+        "CWE-328"
+      ],
+      "description": "Replaced hashlib.md5() with hashlib.sha256()"
+    },
+    {
+      "file": "/home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/test-fixtures/sample-app/vulnerable_app.py",
+      "line": 10,
+      "original": "hashlib.sha1(",
+      "fixed": "hashlib.sha256(",
+      "rule": "insecure-crypto",
+      "cwe": [
+        "CWE-327",
+        "CWE-328"
+      ],
+      "description": "Replaced hashlib.sha1() with hashlib.sha256()"
+    }
+  ],
+  "dry_run": true
+}

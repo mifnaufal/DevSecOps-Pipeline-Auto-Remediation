@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -290,19 +289,23 @@ func listFindings(w http.ResponseWriter, r *http.Request) {
 func getFinding(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	f := make(map[string]interface{})
+	var idVal, scanID, extID, scanner, ruleID, title, desc, severity, confidence string
+	var filePath, snippet, hint, fingerprint, status string
+	var startLine, endLine int
+	var remediable bool
+	var createdAt, updatedAt time.Time
 	var cwes, cves []string
+
 	err := db.QueryRow(r.Context(),
 		`SELECT id, scan_id, external_id, scanner, rule_id, cwe, cve,
 			title, description, severity, confidence, file_path, start_line, end_line,
 			code_snippet, remediable, remediation_hint, fingerprint, status, created_at, updated_at
 		 FROM findings WHERE id = $1`,
 		id).Scan(
-		&f["id"], &f["scan_id"], &f["external_id"], &f["scanner"], &f["rule_id"],
-		&cwes, &cves, &f["title"], &f["description"], &f["severity"], &f["confidence"],
-		&f["file_path"], &f["start_line"], &f["end_line"], &f["code_snippet"],
-		&f["remediable"], &f["remediation_hint"], &f["fingerprint"], &f["status"],
-		&f["created_at"], &f["updated_at"],
+		&idVal, &scanID, &extID, &scanner, &ruleID,
+		&cwes, &cves, &title, &desc, &severity, &confidence,
+		&filePath, &startLine, &endLine, &snippet,
+		&remediable, &hint, &fingerprint, &status, &createdAt, &updatedAt,
 	)
 
 	if err != nil {
@@ -310,8 +313,15 @@ func getFinding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f["cwe"] = cwes
-	f["cve"] = cves
+	f := map[string]interface{}{
+		"id": idVal, "scan_id": scanID, "external_id": extID, "scanner": scanner,
+		"rule_id": ruleID, "cwe": cwes, "cve": cves, "title": title,
+		"description": desc, "severity": severity, "confidence": confidence,
+		"file_path": filePath, "start_line": startLine, "end_line": endLine,
+		"code_snippet": snippet, "remediable": remediable, "remediation_hint": hint,
+		"fingerprint": fingerprint, "status": status, "created_at": createdAt, "updated_at": updatedAt,
+	}
+
 	render.JSON(w, r, f)
 }
 
@@ -366,10 +376,24 @@ func listFixes(w http.ResponseWriter, r *http.Request) {
 
 	var fixes []map[string]interface{}
 	for rows.Next() {
-		f := make(map[string]interface{})
-		rows.Scan(&f["id"], &f["finding_id"], &f["codemod_name"], &f["file_path"],
-			&f["status"], &f["validation_passed"], &f["rescan_passed"],
-			&f["pr_url"], &f["pr_number"], &f["error"], &f["applied_at"])
+		var id, findingID, codemodName, filePath, status string
+		var validationPassed, rescanPassed bool
+		var prURL, prNum, errMsg *string
+		var appliedAt *time.Time
+
+		if err := rows.Scan(&id, &findingID, &codemodName, &filePath,
+			&status, &validationPassed, &rescanPassed,
+			&prURL, &prNum, &errMsg, &appliedAt); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		f := map[string]interface{}{
+			"id": id, "finding_id": findingID, "codemod_name": codemodName,
+			"file_path": filePath, "status": status,
+			"validation_passed": validationPassed, "rescan_passed": rescanPassed,
+			"pr_url": prURL, "pr_number": prNum, "error": errMsg, "applied_at": appliedAt,
+		}
 		fixes = append(fixes, f)
 	}
 
@@ -378,21 +402,33 @@ func listFixes(w http.ResponseWriter, r *http.Request) {
 
 func getFix(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	f := make(map[string]interface{})
+
+	var idVal, findingID, codemodName, filePath, status string
+	var originalCode, fixedCode, prURL, prNum, errMsg *string
+	var validationPassed, rescanPassed bool
+	var appliedAt *time.Time
+
 	err := db.QueryRow(r.Context(),
 		`SELECT id, finding_id, codemod_name, file_path, original_code, fixed_code,
 			status, validation_passed, rescan_passed, pr_url, pr_number, error, applied_at
 		 FROM fixes WHERE id = $1`,
 		id).Scan(
-		&f["id"], &f["finding_id"], &f["codemod_name"], &f["file_path"],
-		&f["original_code"], &f["fixed_code"], &f["status"],
-		&f["validation_passed"], &f["rescan_passed"], &f["pr_url"],
-		&f["pr_number"], &f["error"], &f["applied_at"],
+		&idVal, &findingID, &codemodName, &filePath,
+		&originalCode, &fixedCode, &status,
+		&validationPassed, &rescanPassed, &prURL,
+		&prNum, &errMsg, &appliedAt,
 	)
 
 	if err != nil {
 		http.Error(w, "fix not found", http.StatusNotFound)
 		return
+	}
+
+	f := map[string]interface{}{
+		"id": idVal, "finding_id": findingID, "codemod_name": codemodName,
+		"file_path": filePath, "original_code": originalCode, "fixed_code": fixedCode,
+		"status": status, "validation_passed": validationPassed, "rescan_passed": rescanPassed,
+		"pr_url": prURL, "pr_number": prNum, "error": errMsg, "applied_at": appliedAt,
 	}
 
 	render.JSON(w, r, f)
@@ -417,14 +453,34 @@ func getMetrics(w http.ResponseWriter, r *http.Request) {
 
 	var metrics []map[string]interface{}
 	for rows.Next() {
-		m := make(map[string]interface{})
-		rows.Scan(&m["id"], &m["pipeline_run_id"], &m["repository"], &m["commit_sha"],
-			&m["total_duration_sec"], &m["scan_duration_sec"], &m["triage_duration_sec"],
-			&m["remediation_duration_sec"], &m["validation_duration_sec"],
-			&m["total_findings"], &m["high_critical_findings"], &m["fixes_attempted"],
-			&m["fixes_successful"], &m["fix_accuracy_rate"], &m["false_positive_rate"],
-			&m["regression_count"], &m["pr_created"], &m["pr_url"],
-			&m["policy_compliant"], &m["timestamp"])
+		var id, pipelineRunID, repo, commitSHA, prURL string
+		var totalDur, scanDur, triageDur, remediationDur, validationDur *int
+		var totalFindings, highCritical, fixesAttempted, fixesSuccessful, regression *int
+		var fixAccuracy, falsePositiveRate *float64
+		var prCreated, policyCompliant bool
+		var ts time.Time
+
+		if err := rows.Scan(&id, &pipelineRunID, &repo, &commitSHA,
+			&totalDur, &scanDur, &triageDur,
+			&remediationDur, &validationDur,
+			&totalFindings, &highCritical, &fixesAttempted,
+			&fixesSuccessful, &fixAccuracy, &falsePositiveRate,
+			&regression, &prCreated, &prURL,
+			&policyCompliant, &ts); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		m := map[string]interface{}{
+			"id": id, "pipeline_run_id": pipelineRunID, "repository": repo, "commit_sha": commitSHA,
+			"total_duration_sec": totalDur, "scan_duration_sec": scanDur, "triage_duration_sec": triageDur,
+			"remediation_duration_sec": remediationDur, "validation_duration_sec": validationDur,
+			"total_findings": totalFindings, "high_critical_findings": highCritical,
+			"fixes_attempted": fixesAttempted, "fixes_successful": fixesSuccessful,
+			"fix_accuracy_rate": fixAccuracy, "false_positive_rate": falsePositiveRate,
+			"regression_count": regression, "pr_created": prCreated, "pr_url": prURL,
+			"policy_compliant": policyCompliant, "timestamp": ts,
+		}
 		metrics = append(metrics, m)
 	}
 
@@ -432,11 +488,12 @@ func getMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func getMetricsSummary(w http.ResponseWriter, r *http.Request) {
-	var summary map[string]interface{}
-	summary = make(map[string]interface{})
+	var totalScans int
+	var avgDuration, avgFixAccuracy, avgFalsePositive float64
+	var totalFindings, totalFixes, compliantScans int
 
 	err := db.QueryRow(r.Context(),
-		`SELECT 
+		`SELECT
 			COUNT(*) as total_scans,
 			COALESCE(AVG(total_duration_sec), 0) as avg_duration,
 			COALESCE(AVG(fix_accuracy_rate), 0) as avg_fix_accuracy,
@@ -445,14 +502,24 @@ func getMetricsSummary(w http.ResponseWriter, r *http.Request) {
 			COALESCE(SUM(fixes_successful), 0) as total_fixes,
 			COUNT(CASE WHEN policy_compliant THEN 1 END) as compliant_scans
 		 FROM pipeline_metrics`).Scan(
-		&summary["total_scans"], &summary["avg_duration_sec"],
-		&summary["avg_fix_accuracy_rate"], &summary["avg_false_positive_rate"],
-		&summary["total_findings"], &summary["total_fixes"], &summary["compliant_scans"],
+		&totalScans, &avgDuration,
+		&avgFixAccuracy, &avgFalsePositive,
+		&totalFindings, &totalFixes, &compliantScans,
 	)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	summary := map[string]interface{}{
+		"total_scans":             totalScans,
+		"avg_duration_sec":        avgDuration,
+		"avg_fix_accuracy_rate":   avgFixAccuracy,
+		"avg_false_positive_rate": avgFalsePositive,
+		"total_findings":          totalFindings,
+		"total_fixes":             totalFixes,
+		"compliant_scans":         compliantScans,
 	}
 
 	render.JSON(w, r, summary)
@@ -474,8 +541,19 @@ func listPolicyDecisions(w http.ResponseWriter, r *http.Request) {
 
 	var decisions []map[string]interface{}
 	for rows.Next() {
-		d := make(map[string]interface{})
-		rows.Scan(&d["id"], &d["policy_name"], &d["decision"], &d["violations"], &d["evaluated_at"])
+		var id, policyName, decision string
+		var violations string
+		var evaluatedAt time.Time
+
+		if err := rows.Scan(&id, &policyName, &decision, &violations, &evaluatedAt); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		d := map[string]interface{}{
+			"id": id, "policy_name": policyName, "decision": decision,
+			"violations": violations, "evaluated_at": evaluatedAt,
+		}
 		decisions = append(decisions, d)
 	}
 

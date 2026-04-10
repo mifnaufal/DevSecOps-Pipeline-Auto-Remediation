@@ -139,9 +139,11 @@ func TestMapSeverity(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.level+":"+tt.expected, func(t *testing.T) {
-			// Access via method would require exporting - test via Normalize instead
-			_ = tt // Covered by integration tests
+		t.Run(tt.expected, func(t *testing.T) {
+			got := p.mapSeverity(tt.level, tt.props)
+			if string(got) != tt.expected {
+				t.Errorf("mapSeverity(%q) = %q, want %q", tt.level, got, tt.expected)
+			}
 		})
 	}
 }

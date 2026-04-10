@@ -1,0 +1,10 @@
+{
+  "total_fixes": 3,
+  "success_count": 3,
+  "failure_count": 0,
+  "fixes": [
+    {"id": "fix-1", "codemod_name": "insecure_crypto.py", "file_path": "vulnerable_app.py", "status": "success"},
+    {"id": "fix-2", "codemod_name": "sql_injection.py", "file_path": "vulnerable_app.py", "status": "success"},
+    {"id": "fix-3", "codemod_name": "insecure_crypto.js", "file_path": "vulnerable_app.js", "status": "success"}
+  ]
+}

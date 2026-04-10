@@ -20,12 +20,15 @@ from typing import List, Dict, Any
 
 try:
     import tree_sitter_python as tspython
-    from tree_sitter import Language, Node, Parser
+    from tree_sitter import Language, Parser
 
     PY_LANGUAGE = Language(tspython.language())
 except ImportError:
     # Fallback: regex-based mode if tree-sitter isn't available
     PY_LANGUAGE = None
+    # Stub Node type for type hints
+    class Node:
+        pass
 
 
 class InsecureCryptoCodemod:
