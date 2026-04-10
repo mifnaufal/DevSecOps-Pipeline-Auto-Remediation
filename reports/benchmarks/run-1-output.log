@@ -37,3 +37,13 @@ Fixes: /home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/reports/e2e
 Tests: true | Linter: true | Rescan: true
 
 Loaded 3 fixed files
+
+❌ Validation gate FAILED
+  ✅ Validation complete
+
+=== Assertions ===
+  ✅ At least 1 finding detected (5)
+  ✅ Codemod reports generated
+  ⚠️  Validation gate failed (may be expected)
+
+🎉 E2E Test PASSED

@@ -10,13 +10,13 @@ Report: /home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/reports/e2
 
 [Step 2] Running triage engine...
   Building triage engine...
-2026/04/10 10:00:18 Parsing SARIF: /home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/reports/e2e/sarif/semgrep-results.sarif
-2026/04/10 10:00:18 Total raw findings: 6
-2026/04/10 10:00:18 Applying CWE mapping...
-2026/04/10 10:00:18 Deduplicating findings...
-2026/04/10 10:00:18 Findings after dedup: 6
-2026/04/10 10:00:18 Findings after severity filter (≥high): 5
-2026/04/10 10:00:18 Triage completed in 1.125481ms. Output: /home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/reports/e2e/triage/findings.json
+2026/04/10 13:06:21 Parsing SARIF: /home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/reports/e2e/sarif/semgrep-results.sarif
+2026/04/10 13:06:21 Total raw findings: 6
+2026/04/10 13:06:21 Applying CWE mapping...
+2026/04/10 13:06:21 Deduplicating findings...
+2026/04/10 13:06:21 Findings after dedup: 6
+2026/04/10 13:06:21 Findings after severity filter (≥high): 5
+2026/04/10 13:06:21 Triage completed in 514.811µs. Output: /home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/reports/e2e/triage/findings.json
   ✅ Triage complete: 5 findings
 
 [Step 3] Running AST codemods...
@@ -25,7 +25,7 @@ Report: /home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/reports/e2
 Scanned: 1 files, Modified: 1 files, Changes: 2
   Running sql_injection.py...
 
-Scanned: 1 files, Modified: 0 files, Changes: 0
+Scanned: 1 files, Modified: 1 files, Changes: 2
   Running insecure_crypto.js...
 
 Scanned: 1 files, Modified: 1 files, Changes: 1
