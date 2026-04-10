@@ -1,0 +1,82 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "devsecops-main",
+    "title": "DevSecOps Pipeline Overview",
+    "tags": ["devsecops", "security"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Pipeline Execution Duration",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(pipeline_duration_seconds_sum[5m]) / rate(pipeline_duration_seconds_count[5m])",
+            "legendFormat": "Avg Duration"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Findings by Severity",
+        "type": "bargauge",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "pipeline_findings_total{severity=\"critical\"}",
+            "legendFormat": "Critical"
+          },
+          {
+            "expr": "pipeline_findings_total{severity=\"high\"}",
+            "legendFormat": "High"
+          },
+          {
+            "expr": "pipeline_findings_total{severity=\"medium\"}",
+            "legendFormat": "Medium"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Fix Accuracy Rate",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "avg(pipeline_fix_accuracy_rate)",
+            "legendFormat": "Accuracy %"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Policy Compliance Rate",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+        "targets": [
+          {
+            "expr": "sum(pipeline_policy_compliant) / count(pipeline_policy_compliant) * 100",
+            "legendFormat": "Compliance %"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Total Scans (24h)",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+        "targets": [
+          {
+            "expr": "increase(pipeline_scans_total[24h])",
+            "legendFormat": "Scans"
+          }
+        ]
+      }
+    ],
+    "schemaVersion": 38,
+    "version": 1
+  },
+  "overwrite": true
+}
