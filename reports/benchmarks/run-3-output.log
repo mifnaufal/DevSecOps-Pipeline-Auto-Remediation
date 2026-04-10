@@ -1,0 +1,49 @@
+=== DevSecOps Pipeline E2E Test ===
+Target: ./test-fixtures/sample-app
+Report: /home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/reports/e2e
+
+[Setup] Creating test fixtures...
+  Created vulnerable_app.py and vulnerable_app.js
+
+[Step 1] Running security scanners...
+  ⚠️  Semgrep not installed, using mock SARIF
+
+[Step 2] Running triage engine...
+  Building triage engine...
+2026/04/10 10:00:19 Parsing SARIF: /home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/reports/e2e/sarif/semgrep-results.sarif
+2026/04/10 10:00:19 Total raw findings: 6
+2026/04/10 10:00:19 Applying CWE mapping...
+2026/04/10 10:00:19 Deduplicating findings...
+2026/04/10 10:00:19 Findings after dedup: 6
+2026/04/10 10:00:19 Findings after severity filter (≥high): 5
+2026/04/10 10:00:19 Triage completed in 816.739µs. Output: /home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/reports/e2e/triage/findings.json
+  ✅ Triage complete: 5 findings
+
+[Step 3] Running AST codemods...
+  Running insecure_crypto.py...
+
+Scanned: 1 files, Modified: 1 files, Changes: 2
+  Running sql_injection.py...
+
+Scanned: 1 files, Modified: 0 files, Changes: 0
+  Running insecure_crypto.js...
+
+Scanned: 1 files, Modified: 1 files, Changes: 1
+  ✅ Codemods complete
+
+[Step 4] Running validation gate...
+=== Validation Gate ===
+Fixes: /home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/reports/e2e/fixes/fixes.json
+Tests: true | Linter: true | Rescan: true
+
+Loaded 3 fixed files
+
+❌ Validation gate FAILED
+  ✅ Validation complete
+
+=== Assertions ===
+  ✅ At least 1 finding detected (5)
+  ✅ Codemod reports generated
+  ⚠️  Validation gate failed (may be expected)
+
+🎉 E2E Test PASSED

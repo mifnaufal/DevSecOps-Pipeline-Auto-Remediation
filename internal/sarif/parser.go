@@ -103,12 +103,25 @@ func (p *Parser) resultToFinding(result Result, run Run, toolName string, scanID
 	}
 
 	// Extract CWE from rule properties or tags
+	cweExtracted := false
 	if run.Tool.Driver.Rules != nil {
 		for _, rule := range run.Tool.Driver.Rules {
 			if rule.ID == result.RuleID && rule.Properties != nil {
-				finding.CWE = p.mapCWE(rule.Properties.CWE)
+				cwes := p.mapCWE(rule.Properties.CWE)
+				if len(cwes) > 0 {
+					finding.CWE = cwes
+					cweExtracted = true
+				}
 				break
 			}
+		}
+	}
+
+	// Fallback: use internal cweMap based on rule_id pattern matching
+	// This handles SARIF files without full rule metadata (e.g., mock SARIF, older tools)
+	if !cweExtracted {
+		if fallback := p.lookupCWEByRuleID(result.RuleID); len(fallback) > 0 {
+			finding.CWE = fallback
 		}
 	}
 
@@ -175,7 +188,6 @@ func (p *Parser) mapConfidence(kind string) string {
 // mapCWE parses CWE identifiers from rule metadata.
 func (p *Parser) mapCWE(cweStr string) []string {
 	if cweStr == "" {
-		// Try rule-based lookup
 		return nil
 	}
 
@@ -191,6 +203,42 @@ func (p *Parser) mapCWE(cweStr string) []string {
 		}
 	}
 	return cwes
+}
+
+// lookupCWEByRuleID falls back to internal cweMap when SARIF rule metadata is empty.
+// Uses substring matching to find the best CWE for a given rule ID.
+func (p *Parser) lookupCWEByRuleID(ruleID string) []string {
+	ruleIDLower := strings.ToLower(ruleID)
+
+	// Exact match first
+	if cwes, ok := p.cweMap[ruleIDLower]; ok {
+		return cwes
+	}
+
+	// Substring match — longer patterns first for specificity
+	type patternMatch struct {
+		pattern string
+		cwes    []string
+	}
+	var matches []patternMatch
+	for pattern, cwes := range p.cweMap {
+		if strings.Contains(ruleIDLower, pattern) {
+			matches = append(matches, patternMatch{pattern, cwes})
+		}
+	}
+
+	if len(matches) == 0 {
+		return nil
+	}
+
+	// Pick the match with the longest pattern (most specific)
+	best := matches[0]
+	for _, m := range matches[1:] {
+		if len(m.pattern) > len(best.pattern) {
+			best = m
+		}
+	}
+	return best.cwes
 }
 
 // isRemediable checks if a rule ID has a known codemod fix.

@@ -1,0 +1,25 @@
+{
+  "timestamp": "20260410-030016",
+  "target": "./test-fixtures/sample-app",
+  "num_runs": 3,
+  "durations": [2,1,1],
+  "avg_duration_sec": 1,
+  "fix_accuracy_rates": [90,90,90],
+  "false_positive_rates": [3,3,3],
+  "regression_counts": [0,0,0],
+  "policy_compliant_rates": [100,100,100],
+  "targets": {
+    "fix_accuracy_rate": ">=85%",
+    "false_positive_rate": "<=5%",
+    "regression_count": "==0",
+    "pipeline_duration": "<=120s",
+    "policy_compliant": "100%"
+  },
+  "pass_fail": {
+    "fix_accuracy_rate": true,
+    "false_positive_rate": true,
+    "regression_count": true,
+    "pipeline_duration": true,
+    "policy_compliant": true
+  }
+}

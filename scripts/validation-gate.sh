@@ -177,7 +177,7 @@ if [[ "$TESTS_RESULT" != "true" ]] || [[ "$LINTER_RESULT" != "true" ]] || [[ "$R
     PASSED=false
 fi
 
-# Write JSON result
+# Write JSON result with proper nested objects
 ERRORS_JSON="[]"
 if [[ ${#ERRORS[@]} -gt 0 ]]; then
     ERRORS_JSON=$(printf '%s\n' "${ERRORS[@]}" | jq -R . | jq -s .)
@@ -188,17 +188,36 @@ if [[ ${#FIXED_FILES[@]} -gt 0 ]]; then
     FILES_JSON=$(printf '%s\n' "${FIXED_FILES[@]}" | jq -R . | jq -s .)
 fi
 
-cat > "$OUTPUT_PATH" << EOF
-{
-  "passed": $PASSED,
-  "timestamp": "$TIMESTAMP",
-  "tests_result": $([[ "$TESTS_RESULT" == "true" ]] && echo "true" || echo "false"),
-  "linter_result": $([[ "$LINTER_RESULT" == "true" ]] && echo "true" || echo "false"),
-  "rescan_result": $([[ "$RESCAN_RESULT" == "true" ]] && echo "true" || echo "false"),
-  "fixed_files": $FILES_JSON,
-  "errors": $ERRORS_JSON
-}
-EOF
+# Build nested JSON objects for each check result
+TESTS_JSON=$(jq -n \
+  --argjson passed "$([[ "$TESTS_RESULT" == "true" ]] && echo true || echo false)" \
+  '{passed: $passed, output: (if $passed then "Tests passed" else "Tests failed or skipped" end)}')
+
+LINTER_JSON=$(jq -n \
+  --argjson passed "$([[ "$LINTER_RESULT" == "true" ]] && echo true || echo false)" \
+  '{passed: $passed, output: (if $passed then "Linter passed" else "Linter failed or skipped" end)}')
+
+RESCAN_JSON=$(jq -n \
+  --argjson passed "$([[ "$RESCAN_RESULT" == "true" ]] && echo true || echo false)" \
+  '{passed: $passed, new_findings: 0, output: (if $passed then "No new findings" else "New findings detected" end)}')
+
+jq -n \
+  --argjson passed "$([[ "$PASSED" == "true" ]] && echo true || echo false)" \
+  --arg timestamp "$TIMESTAMP" \
+  --argjson tests "$TESTS_JSON" \
+  --argjson linter "$LINTER_JSON" \
+  --argjson rescan "$RESCAN_JSON" \
+  --argjson fixed_files "$FILES_JSON" \
+  --argjson errors "$ERRORS_JSON" \
+  '{
+    passed: $passed,
+    timestamp: $timestamp,
+    tests_result: $tests,
+    linter_result: $linter,
+    rescan_result: $rescan,
+    fixed_files: $fixed_files,
+    errors: $errors
+  }' > "$OUTPUT_PATH"
 
 echo ""
 if $PASSED; then

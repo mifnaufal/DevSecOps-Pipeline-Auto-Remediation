@@ -202,3 +202,40 @@ func TestFingerprint(t *testing.T) {
 		t.Error("Fingerprint should be deterministic")
 	}
 }
+
+func TestLookupCWEByRuleID_Fallback(t *testing.T) {
+	p := NewParser()
+
+	// Exact matches
+	cwes := p.lookupCWEByRuleID("md5-used")
+	if len(cwes) == 0 || cwes[0] != "CWE-328" {
+		t.Errorf("Expected CWE-328 for md5-used, got %v", cwes)
+	}
+
+	cwes = p.lookupCWEByRuleID("sql-injection")
+	if len(cwes) == 0 || cwes[0] != "CWE-89" {
+		t.Errorf("Expected CWE-89 for sql-injection, got %v", cwes)
+	}
+
+	cwes = p.lookupCWEByRuleID("hardcoded-secret")
+	if len(cwes) == 0 || cwes[0] != "CWE-798" {
+		t.Errorf("Expected CWE-798 for hardcoded-secret, got %v", cwes)
+	}
+
+	// Substring match
+	cwes = p.lookupCWEByRuleID("semgrep.rules.md5-used-v2")
+	if len(cwes) == 0 || cwes[0] != "CWE-328" {
+		t.Errorf("Expected CWE-328 for md5-used substring, got %v", cwes)
+	}
+
+	cwes = p.lookupCWEByRuleID("python.sql-injection.dynamic")
+	if len(cwes) == 0 || cwes[0] != "CWE-89" {
+		t.Errorf("Expected CWE-89 for sql-injection substring, got %v", cwes)
+	}
+
+	// Unknown rule
+	cwes = p.lookupCWEByRuleID("some-unknown-rule-xyz")
+	if len(cwes) != 0 {
+		t.Errorf("Expected empty CWE for unknown rule, got %v", cwes)
+	}
+}
