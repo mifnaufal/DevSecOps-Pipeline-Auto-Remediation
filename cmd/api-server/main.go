@@ -179,8 +179,11 @@ func listScans(w http.ResponseWriter, r *http.Request) {
 func getScan(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	var scan map[string]interface{}
-	scan = make(map[string]interface{})
+	var idVal, repo, commitSHA, branch, trigger, scanType, tool, toolVer, status, sarifPath, errMsg string
+	var filesScanned, findings, critical, high, medium, low, duration int
+	var startedAt time.Time
+	var completedAt, createdAt *time.Time
+
 	err := db.QueryRow(r.Context(),
 		`SELECT id, repository, commit_sha, branch, trigger_type, scan_type, tool,
 			tool_version, status, files_scanned, finding_count, critical_count, high_count,
@@ -188,17 +191,23 @@ func getScan(w http.ResponseWriter, r *http.Request) {
 			error_message, created_at
 		 FROM scans WHERE id = $1`,
 		id).Scan(
-		&scan["id"], &scan["repository"], &scan["commit_sha"], &scan["branch"],
-		&scan["trigger_type"], &scan["scan_type"], &scan["tool"], &scan["tool_version"],
-		&scan["status"], &scan["files_scanned"], &scan["finding_count"], &scan["critical_count"],
-		&scan["high_count"], &scan["medium_count"], &scan["low_count"], &scan["sarif_path"],
-		&scan["started_at"], &scan["completed_at"], &scan["duration_seconds"],
-		&scan["error_message"], &scan["created_at"],
+		&idVal, &repo, &commitSHA, &branch, &trigger, &scanType, &tool, &toolVer,
+		&status, &filesScanned, &findings, &critical, &high, &medium, &low, &sarifPath,
+		&startedAt, &completedAt, &duration, &errMsg, &createdAt,
 	)
 
 	if err != nil {
 		http.Error(w, "scan not found", http.StatusNotFound)
 		return
+	}
+
+	scan := map[string]interface{}{
+		"id": idVal, "repository": repo, "commit_sha": commitSHA, "branch": branch,
+		"trigger_type": trigger, "scan_type": scanType, "tool": tool, "tool_version": toolVer,
+		"status": status, "files_scanned": filesScanned, "finding_count": findings,
+		"critical_count": critical, "high_count": high, "medium_count": medium, "low_count": low,
+		"sarif_path": sarifPath, "started_at": startedAt, "completed_at": completedAt,
+		"duration_seconds": duration, "error_message": errMsg, "created_at": createdAt,
 	}
 
 	render.JSON(w, r, scan)

@@ -49,11 +49,11 @@ type RescanResult struct {
 
 func main() {
 	var (
-		fixesPath  = flag.String("fixes", "reports/fixes/fixes.json", "Path to fixes.json")
-		runTests   = flag.Bool("run-tests", true, "Run unit tests on modified files")
-		runLinter  = flag.Bool("run-linter", true, "Run linter on modified files")
-		runRescan  = flag.Bool("run-rescan", true, "Run lightweight security rescan")
-		output     = flag.String("output", "reports/validation/result.json", "Output validation result")
+		fixesPath   = flag.String("fixes", "reports/fixes/fixes.json", "Path to fixes.json")
+		doRunTests  = flag.Bool("run-tests", true, "Run unit tests on modified files")
+		doLinter    = flag.Bool("run-linter", true, "Run linter on modified files")
+		doRescan    = flag.Bool("run-rescan", true, "Run lightweight security rescan")
+		output      = flag.String("output", "reports/validation/result.json", "Output validation result")
 	)
 	flag.Parse()
 
@@ -81,7 +81,7 @@ func main() {
 	}
 
 	// 1. Run unit tests
-	if *runTests {
+	if *doRunTests {
 		result.TestsResult = runTestsOnFiles(result.FixedFiles)
 		if !result.TestsResult.Passed {
 			result.Passed = false
@@ -90,7 +90,7 @@ func main() {
 	}
 
 	// 2. Run linter
-	if *runLinter {
+	if *doLinter {
 		result.LinterResult = runLinterOnFiles(result.FixedFiles)
 		if !result.LinterResult.Passed {
 			result.Passed = false
@@ -99,7 +99,7 @@ func main() {
 	}
 
 	// 3. Run lightweight rescan
-	if *runRescan {
+	if *doRescan {
 		result.RescanResult = runRescan(result.FixedFiles)
 		if !result.RescanResult.Passed {
 			result.Passed = false

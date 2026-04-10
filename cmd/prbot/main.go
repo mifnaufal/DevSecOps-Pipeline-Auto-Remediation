@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -150,9 +149,103 @@ func loadFindings(path string) ([]models.Finding, error) {
 		return nil, err
 	}
 
-	var findings []models.Finding
-	if err := json.Unmarshal(data, &findings); err != nil {
+	// Parse as raw JSON first to handle nullable timestamps
+	var rawFindings []map[string]interface{}
+	if err := json.Unmarshal(data, &rawFindings); err != nil {
 		return nil, err
+	}
+
+	var findings []models.Finding
+	for _, raw := range rawFindings {
+		f := models.Finding{
+			Status: models.FindingStatusNew,
+		}
+
+		if v, ok := raw["id"].(string); ok {
+			f.ID = v
+		}
+		if v, ok := raw["external_id"].(string); ok {
+			f.ExternalID = v
+		}
+		if v, ok := raw["scanner"].(string); ok {
+			f.Scanner = v
+		}
+		if v, ok := raw["rule_id"].(string); ok {
+			f.RuleID = v
+		}
+		if v, ok := raw["title"].(string); ok {
+			f.Title = v
+		}
+		if v, ok := raw["description"].(string); ok {
+			f.Description = v
+		}
+		if v, ok := raw["severity"].(string); ok {
+			f.Severity = models.Severity(v)
+		}
+		if v, ok := raw["confidence"].(string); ok {
+			f.Confidence = v
+		}
+		if v, ok := raw["file_path"].(string); ok {
+			f.FilePath = v
+		}
+		if v, ok := raw["code_snippet"].(string); ok {
+			f.CodeSnippet = v
+		}
+		if v, ok := raw["remediation_hint"].(string); ok {
+			f.RemediationHint = v
+		}
+		if v, ok := raw["fingerprint"].(string); ok {
+			f.Fingerprint = v
+		}
+		if v, ok := raw["scan_id"].(string); ok {
+			f.ScanID = v
+		}
+		if v, ok := raw["remediable"].(bool); ok {
+			f.Remediable = v
+		}
+		if v, ok := raw["start_line"].(float64); ok {
+			f.StartLine = int(v)
+		}
+		if v, ok := raw["end_line"].(float64); ok {
+			f.EndLine = int(v)
+		}
+
+		// Handle CWE array
+		if cwes, ok := raw["cwe"].([]interface{}); ok {
+			for _, c := range cwes {
+				if cs, ok := c.(string); ok {
+					f.CWE = append(f.CWE, cs)
+				}
+			}
+		}
+
+		// Handle CVE array
+		if cves, ok := raw["cve"].([]interface{}); ok {
+			for _, c := range cves {
+				if cs, ok := c.(string); ok {
+					f.CVE = append(f.CVE, cs)
+				}
+			}
+		}
+
+		// Handle nullable timestamps safely
+		if v, ok := raw["created_at"].(string); ok && v != "" {
+			if t, err := time.Parse(time.RFC3339, v); err == nil {
+				f.CreatedAt = t
+			}
+		}
+		if v, ok := raw["updated_at"].(string); ok && v != "" {
+			if t, err := time.Parse(time.RFC3339, v); err == nil {
+				f.UpdatedAt = t
+			}
+		}
+
+		// Handle status
+		if v, ok := raw["status"].(string); ok {
+			f.Status = models.FindingStatus(v)
+		}
+
+		findings = append(findings, f)
 	}
 
 	return findings, nil

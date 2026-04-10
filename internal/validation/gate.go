@@ -53,8 +53,12 @@ func (g *Gate) Run(files []string) Result {
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
 
+	testRunner := NewTestRunner()
+	linter := NewLinter()
+	rescan := NewRescan()
+
 	if g.RunTests {
-		r := runTests()
+		r := g.runTests(testRunner)
 		result.TestsResult = &r
 		if !r.Passed {
 			result.Passed = false
@@ -63,7 +67,7 @@ func (g *Gate) Run(files []string) Result {
 	}
 
 	if g.RunLinter {
-		r := runLinter(files)
+		r := g.runLinter(linter, files)
 		result.LinterResult = &r
 		if !r.Passed {
 			result.Passed = false
@@ -72,7 +76,7 @@ func (g *Gate) Run(files []string) Result {
 	}
 
 	if g.RunRescan {
-		r := runRescan(files)
+		r := rescan.Run(files)
 		result.RescanResult = &r
 		if !r.Passed {
 			result.Passed = false
@@ -82,6 +86,54 @@ func (g *Gate) Run(files []string) Result {
 
 	result.DurationSec = time.Since(start).Seconds()
 	return result
+}
+
+// runTests executes language-specific unit tests.
+func (g *Gate) runTests(runner *TestRunner) CheckResult {
+	// Try Go tests first
+	if cmd := DetectTestCommand(); cmd != nil {
+		if strings.HasPrefix(cmd.Path, "go") {
+			return runner.RunGoTests()
+		}
+		if strings.HasPrefix(cmd.Path, "npm") || strings.HasPrefix(cmd.Path, "npx") {
+			return runner.RunNpmTests()
+		}
+		if strings.HasPrefix(cmd.Path, "pytest") {
+			return runner.RunPytest()
+		}
+	}
+	// Try all in order
+	if r := runner.RunGoTests(); r.Passed {
+		return r
+	}
+	if r := runner.RunNpmTests(); r.Passed {
+		return r
+	}
+	return runner.RunPytest()
+}
+
+// runLinter executes language-specific linting.
+func (g *Gate) runLinter(l *Linter, files []string) CheckResult {
+	if cmd := DetectLinterCommand(files); cmd != nil {
+		if strings.HasPrefix(cmd.Path, "golangci-lint") {
+			return l.RunGolangciLint()
+		}
+		if strings.HasPrefix(cmd.Path, "go") {
+			return l.RunGoVet()
+		}
+		if strings.HasPrefix(cmd.Path, "npx") {
+			return l.RunESLint()
+		}
+		if strings.HasPrefix(cmd.Path, "ruff") {
+			return l.RunRuff()
+		}
+	}
+	// Default fallback
+	if linter, err := exec.LookPath("golangci-lint"); err == nil {
+		_ = linter
+		return l.RunGolangciLint()
+	}
+	return l.RunGoVet()
 }
 
 // Save writes the result to a JSON file.

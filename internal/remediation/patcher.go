@@ -26,7 +26,6 @@ func (p *Patcher) ApplyPatch(patchPath string) error {
 	// Parse unified diff format and apply changes
 	lines := strings.Split(string(data), "\n")
 	var currentFile string
-	var adding bool
 
 	for _, line := range lines {
 		switch {
@@ -41,13 +40,9 @@ func (p *Patcher) ApplyPatch(patchPath string) error {
 		case strings.HasPrefix(line, "--- "):
 			// skip
 		case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
-			if currentFile != "" {
-				adding = true
-			}
+			_ = currentFile // TODO: implement actual patch application
 		case strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---"):
-			if currentFile != "" {
-				adding = false
-			}
+			_ = currentFile // TODO: implement actual patch application
 		case strings.HasPrefix(line, "@@"):
 			// Hunk header - in production, parse line numbers
 		default:

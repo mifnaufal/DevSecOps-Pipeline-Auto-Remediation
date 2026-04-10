@@ -137,7 +137,7 @@ export default function FindingsPage() {
                           </div>
                           <div>
                             <span className="text-xs font-medium text-gray-500 uppercase">Remediable</span>
-                            <p className="text-sm">{f.remediiable !== false ? '✅ Yes' : '❌ No'}</p>
+                            <p className="text-sm">{f.remediable !== false ? '✅ Yes' : '❌ No'}</p>
                           </div>
                         </div>
 
