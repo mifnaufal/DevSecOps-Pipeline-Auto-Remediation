@@ -59,6 +59,7 @@ func main() {
 		r.Get("/health", healthCheck)
 
 		// Scans
+		r.Post("/scan", createScan)
 		r.Get("/scans", listScans)
 		r.Get("/scans/{id}", getScan)
 
@@ -209,6 +210,106 @@ func getScan(w http.ResponseWriter, r *http.Request) {
 		"duration_seconds": duration, "error_message": errMsg, "created_at": createdAt,
 	}
 
+	render.JSON(w, r, scan)
+}
+
+type ScanCreateRequest struct {
+	Repository string `json:"repository"`
+	Branch     string `json:"branch"`
+	CommitSHA  string `json:"commit_sha,omitempty"`
+	Tool       string `json:"tool"`
+	ScanType   string `json:"scan_type"`
+	Trigger    string `json:"trigger_type,omitempty"`
+	TargetPath string `json:"target_path,omitempty"` // local path or URL to scan
+}
+
+func (r *ScanCreateRequest) Bind(_ *http.Request) error { return nil }
+
+func createScan(w http.ResponseWriter, r *http.Request) {
+	var req ScanCreateRequest
+	if err := render.Bind(r, &req); err != nil {
+		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.Repository == "" {
+		http.Error(w, "repository is required", http.StatusBadRequest)
+		return
+	}
+	if req.Branch == "" {
+		http.Error(w, "branch is required", http.StatusBadRequest)
+		return
+	}
+	if req.Tool == "" {
+		http.Error(w, "tool is required", http.StatusBadRequest)
+		return
+	}
+
+	// Set defaults
+	if req.ScanType == "" {
+		req.ScanType = "sast"
+	}
+	if req.Trigger == "" {
+		req.Trigger = "manual"
+	}
+	if req.CommitSHA == "" {
+		req.CommitSHA = "pending"
+	}
+
+	// Validate tool
+	validTools := map[string]bool{"semgrep": true, "trivy": true, "zap": true, "nuclei": true, "custom": true}
+	if !validTools[req.Tool] {
+		http.Error(w, "invalid tool. must be one of: semgrep, trivy, zap, nuclei, custom", http.StatusBadRequest)
+		return
+	}
+
+	// Validate scan_type
+	validTypes := map[string]bool{"sast": true, "sca": true, "dast": true, "secrets": true, "iac": true, "custom": true}
+	if !validTypes[req.ScanType] {
+		http.Error(w, "invalid scan_type. must be one of: sast, sca, dast, secrets, iac, custom", http.StatusBadRequest)
+		return
+	}
+
+	// Insert scan into database with status "queued"
+	var scanID string
+	err := db.QueryRow(r.Context(),
+		`INSERT INTO scans (repository, commit_sha, branch, trigger_type, scan_type, tool, status, started_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, 'queued', NOW())
+		 RETURNING id`,
+		req.Repository, req.CommitSHA, req.Branch, req.Trigger, req.ScanType, req.Tool,
+	).Scan(&scanID)
+
+	if err != nil {
+		log.Printf("Failed to create scan: %v", err)
+		http.Error(w, "failed to create scan: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// If a target path is provided, store it in a simple file marker
+	// In production, this would trigger an async worker. For now, we record it.
+	if req.TargetPath != "" {
+		// Store target path as a note in the error_message field temporarily
+		// (proper implementation would use a scan_jobs table)
+		_, _ = db.Exec(r.Context(),
+			"UPDATE scans SET error_message = $1 WHERE id = $2",
+			"target:"+req.TargetPath, scanID)
+	}
+
+	scan := map[string]interface{}{
+		"id":           scanID,
+		"repository":   req.Repository,
+		"branch":       req.Branch,
+		"commit_sha":   req.CommitSHA,
+		"tool":         req.Tool,
+		"scan_type":    req.ScanType,
+		"trigger_type": req.Trigger,
+		"status":       "queued",
+		"target_path":  req.TargetPath,
+		"message":      "Scan created successfully. Use GET /api/v1/scans/" + scanID + " to check status.",
+	}
+
+	w.WriteHeader(http.StatusCreated)
 	render.JSON(w, r, scan)
 }
 

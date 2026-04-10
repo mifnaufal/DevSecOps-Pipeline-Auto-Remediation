@@ -17,6 +17,18 @@ export interface Scan {
   started_at: string;
   completed_at: string;
   duration_seconds: number;
+  target_path?: string;
+  message?: string;
+}
+
+export interface ScanCreateRequest {
+  repository: string;
+  branch: string;
+  commit_sha?: string;
+  tool: string;
+  scan_type?: string;
+  trigger_type?: string;
+  target_path?: string;
 }
 
 export interface Finding {
@@ -88,6 +100,19 @@ export const api = {
 
   scan: (id: string) =>
     request<Scan>(`/api/v1/scans/${id}`),
+
+  createScan: async (data: ScanCreateRequest) => {
+    const res = await fetch(`${API_URL}/api/v1/scan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Failed to create scan: ${res.status} ${text}`);
+    }
+    return res.json() as Promise<Scan>;
+  },
 
   findings: (params?: { severity?: string; status?: string; scanner?: string }) =>
     request<Finding[]>('/api/v1/findings', params as Record<string, string>),
