@@ -256,19 +256,31 @@ func listFindings(w http.ResponseWriter, r *http.Request) {
 
 	var findings []map[string]interface{}
 	for rows.Next() {
-		f := make(map[string]interface{})
+		var id, scanID, extID, scanner, ruleID, title, desc, severity, confidence string
+		var filePath, snippet, hint, status string
+		var startLine, endLine int
+		var remediable bool
+		var createdAt time.Time
 		var cwes, cves []string
+
 		if err := rows.Scan(
-			&f["id"], &f["scan_id"], &f["external_id"], &f["scanner"], &f["rule_id"],
-			&cwes, &cves, &f["title"], &f["description"], &f["severity"], &f["confidence"],
-			&f["file_path"], &f["start_line"], &f["end_line"], &f["code_snippet"],
-			&f["remediable"], &f["remediation_hint"], &f["status"], &f["created_at"],
+			&id, &scanID, &extID, &scanner, &ruleID,
+			&cwes, &cves, &title, &desc, &severity, &confidence,
+			&filePath, &startLine, &endLine, &snippet,
+			&remediable, &hint, &status, &createdAt,
 		); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		f["cwe"] = cwes
-		f["cve"] = cves
+
+		f := map[string]interface{}{
+			"id": id, "scan_id": scanID, "external_id": extID, "scanner": scanner,
+			"rule_id": ruleID, "cwe": cwes, "cve": cves, "title": title,
+			"description": desc, "severity": severity, "confidence": confidence,
+			"file_path": filePath, "start_line": startLine, "end_line": endLine,
+			"code_snippet": snippet, "remediable": remediable, "remediation_hint": hint,
+			"status": status, "created_at": createdAt,
+		}
 		findings = append(findings, f)
 	}
 
