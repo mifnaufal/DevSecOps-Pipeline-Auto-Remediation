@@ -4,7 +4,9 @@
     "external_id": "hardcoded-secret",
     "scanner": "semgrep",
     "rule_id": "hardcoded-secret",
-    "cwe": null,
+    "cwe": [
+      "CWE-798"
+    ],
     "cve": null,
     "title": "Hardcoded secret detected",
     "description": "Hardcoded secret detected",
@@ -27,7 +29,9 @@
     "external_id": "md5-used",
     "scanner": "semgrep",
     "rule_id": "md5-used",
-    "cwe": null,
+    "cwe": [
+      "CWE-328"
+    ],
     "cve": null,
     "title": "Use of MD5 hash function",
     "description": "Use of MD5 hash function",
@@ -50,7 +54,9 @@
     "external_id": "sha1-used",
     "scanner": "semgrep",
     "rule_id": "sha1-used",
-    "cwe": null,
+    "cwe": [
+      "CWE-328"
+    ],
     "cve": null,
     "title": "Use of SHA1 hash function",
     "description": "Use of SHA1 hash function",
@@ -73,7 +79,9 @@
     "external_id": "sql-injection",
     "scanner": "semgrep",
     "rule_id": "sql-injection",
-    "cwe": null,
+    "cwe": [
+      "CWE-89"
+    ],
     "cve": null,
     "title": "SQL injection via string concatenation",
     "description": "SQL injection via string concatenation",

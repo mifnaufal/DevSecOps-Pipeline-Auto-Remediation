@@ -80,13 +80,10 @@ func TestExecute_UnknownRule(t *testing.T) {
 func TestExecute_DryRun(t *testing.T) {
 	// Create temp directory with a mock codemod script
 	tmpDir := t.TempDir()
-	scriptDir := filepath.Join(tmpDir, "codemods")
-	if err := os.MkdirAll(scriptDir, 0755); err != nil {
-		t.Fatal(err)
-	}
 
-	// Create a mock codemod that outputs valid JSON
-	mockScript := filepath.Join(scriptDir, "mock_codemod.py")
+	// The executor constructs path as: codemodsDir + "/" + info.Script
+	// So the script must be at the codemodsDir root
+	mockScript := filepath.Join(tmpDir, "mock_codemod.py")
 	mockContent := `import argparse, json, sys, os
 parser = argparse.ArgumentParser()
 parser.add_argument("target_dir")
