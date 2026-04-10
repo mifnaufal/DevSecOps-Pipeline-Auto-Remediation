@@ -73,7 +73,7 @@ class SQLInjectionCodemod:
     # Dataflow patterns: detect unsafe SQL assigned to variables
     # then find execute(var) calls that use those variables.
     DATAFLOW_ASSIGNMENT = re.compile(
-        r'^(\w+)\s*=\s*(?:"[^"]*"\s*\+\s*\w+|f"[^"]*\{[^}]+\}[^"]*"|'
+        r'^\s*(\w+)\s*=\s*(?:"[^"]*"\s*\+\s*\w+|f"[^"]*\{[^}]+\}[^"]*"|'
         r'"[^"]*%s[^"]*"\s*%\s*\w+|"[^"]*\{\}[^"]*"\.format\s*\(\s*\w+\s*\))',
         re.MULTILINE,
     )

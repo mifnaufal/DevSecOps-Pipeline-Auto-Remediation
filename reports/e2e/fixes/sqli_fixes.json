@@ -1,7 +1,30 @@
 {
   "codemod": "sql_injection_python",
   "files_scanned": 1,
-  "files_modified": 0,
-  "changes": [],
+  "files_modified": 1,
+  "changes": [
+    {
+      "file": "/home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/test-fixtures/sample-app/vulnerable_app.py",
+      "line": 16,
+      "original": "    query = \"SELECT * FROM users WHERE id = \" + user_id",
+      "fixed": "# TODO(sec-review): unsafe SQL \u2014 use parameterized query instead of string concat",
+      "rule": "sql-injection-dataflow",
+      "cwe": [
+        "CWE-89"
+      ],
+      "description": "Unsafe SQL assignment via string_concat. Variable 'query' built from 'user_id'. Convert to parameterized query."
+    },
+    {
+      "file": "/home/alxyz09/Project/evSecOps Pipeline with Auto-Remediation/test-fixtures/sample-app/vulnerable_app.py",
+      "line": 17,
+      "original": "cursor.execute(query)",
+      "fixed": "cursor.execute(\"SELECT * FROM users WHERE id =\" + \" = ?\", (user_id,))",
+      "rule": "sql-injection-dataflow",
+      "cwe": [
+        "CWE-89"
+      ],
+      "description": "Dataflow: converted unsafe SQL assignment to parameterized query. Original variable: 'query'"
+    }
+  ],
   "dry_run": true
 }

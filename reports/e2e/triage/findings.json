@@ -104,7 +104,10 @@
     "external_id": "insecure_crypto",
     "scanner": "semgrep",
     "rule_id": "insecure_crypto",
-    "cwe": null,
+    "cwe": [
+      "CWE-327",
+      "CWE-328"
+    ],
     "cve": null,
     "title": "Use of weak cryptographic algorithm",
     "description": "Use of weak cryptographic algorithm",
