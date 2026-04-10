@@ -1,7 +1,6 @@
 package prbot
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
